@@ -2,6 +2,7 @@ from app import cache, logger, config
 from PIL import Image, ImageOps
 from typing import Optional
 import io
+import base64
 import requests
 
 def isValidImageUrl(url: str) -> bool:
@@ -57,8 +58,22 @@ def upload(key: str, url: str) -> Optional[str]:
 	newImage.save(newImageBytesIO, subsampling = 0, quality = 90, format = "PNG")
 	pngBytes = newImageBytesIO.getvalue()
 	logger.info(f"[IMAGE UPLOAD] Processed image, PNG size: {len(pngBytes)} bytes")
-	logger.info("[IMAGE UPLOAD] Image upload disabled, skipping upload")
-	return None
+	
+	# Upload to imgBB as fallback service
+	if not config.config["display"]["posters"]["imgbbAPIKey"]:
+		logger.warning("[IMAGE UPLOAD] imgBB API key not configured, skipping upload")
+		return None
+	
+	try:
+		uploadedImageUrl = uploadToImgBB(pngBytes)
+		if uploadedImageUrl:
+			cache.set(key, uploadedImageUrl, 0)
+			logger.info(f"[IMAGE UPLOAD] Successfully uploaded to imgBB: {uploadedImageUrl}")
+			return uploadedImageUrl
+	except Exception as e:
+		logger.error(f"[IMAGE UPLOAD] Failed to upload image to imgBB: {e}")
+		logger.exception("[IMAGE UPLOAD] Exception details:")
+		return None
 
 def getTmdbPosterUrl(tmdbId: str, mediaType: str, size: str = "w500") -> Optional[str]:
 	"""Get TMDB poster URL for a given TMDB ID and media type.
@@ -121,4 +136,60 @@ def getTmdbPosterUrl(tmdbId: str, mediaType: str, size: str = "w500") -> Optiona
 		return None
 	except Exception as e:
 		logger.debug(f"[TMDB] Error processing TMDB response for {tmdbId}: {e}")
+		return None
+
+def uploadToImgBB(pngBytes: bytes) -> Optional[str]:
+	"""Upload image to imgBB and return the image URL.
+	
+	Args:
+		pngBytes: PNG image bytes to upload
+		
+	Returns:
+		Image URL or None if upload fails
+	"""
+	apiKey = config.config["display"]["posters"]["imgbbAPIKey"]
+	if not apiKey:
+		return None
+	
+	logger.debug("[IMGBB] Uploading image to imgBB")
+	
+	# Convert image to base64 as per imgBB API
+	imageBase64 = base64.b64encode(pngBytes).decode('utf-8')
+	
+	try:
+		# 24 hours expiration = 24 * 60 * 60 = 86400 seconds
+		expirationSeconds = 24 * 60 * 60
+		response = requests.post(
+			"https://api.imgbb.com/1/upload",
+			params = { "key": apiKey, "expiration": expirationSeconds },
+			data = { "image": imageBase64 },
+			timeout = 30
+		)
+		response.raise_for_status()
+		data = response.json()
+		
+		if not data.get("success"):
+			logger.error(f"[IMGBB] Upload failed: {data}")
+			return None
+		
+		imageUrl = data.get("data", {}).get("url")
+		if not imageUrl:
+			logger.error(f"[IMGBB] No URL in response: {data}")
+			return None
+		
+		# Validate URL before returning
+		if not isValidImageUrl(imageUrl):
+			logger.error(f"[IMGBB] Invalid URL returned: {imageUrl[:200]}...")
+			return None
+		
+		logger.debug(f"[IMGBB] Upload successful, URL length: {len(imageUrl)}")
+		return imageUrl
+	except requests.exceptions.RequestException as e:
+		logger.error(f"[IMGBB] Request failed: {e}")
+		if hasattr(e, 'response') and e.response is not None:
+			logger.error(f"[IMGBB] Response status: {e.response.status_code}")
+			logger.error(f"[IMGBB] Response body: {e.response.text}")
+		return None
+	except Exception as e:
+		logger.error(f"[IMGBB] Upload failed: {e}")
 		return None

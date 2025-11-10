@@ -17,6 +17,7 @@ class StatusTextType(TypedDict):
 class Posters(TypedDict):
 	enabled: bool
 	tmdbAPIKey: str
+	imgbbAPIKey: str
 	maxSize: int
 	fit: bool
 
@@ -79,6 +80,7 @@ config: Config = {
 		"posters": {
 			"enabled": True,
 			"tmdbAPIKey": "",
+			"imgbbAPIKey": "",
 			"maxSize": 256,
 			"fit": True,
 		},

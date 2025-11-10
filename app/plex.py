@@ -320,13 +320,13 @@ class PlexAlertListener(threading.Thread):
 					thumbUrl = tmdbPosterUrl
 					self.logger.debug(f"Using TMDB poster URL for {mediaType}: {tmdbPosterUrl}")
 				else:
-					# Fallback to upload (which now returns None, so we'll skip)
+					# Fallback to imgBB upload if TMDB fails
 					thumbUrl = images.upload(thumb, self.server.url(thumb, True)) or ""
 			elif thumb:
-				# No TMDB ID, try upload (which now returns None)
+				# No TMDB ID, upload to imgBB as fallback
 				thumbUrl = images.upload(thumb, self.server.url(thumb, True)) or ""
 			
-			# For small thumb (artist images for tracks), no TMDB support
+			# For small thumb (artist images for tracks), upload to imgBB (no TMDB support)
 			if smallThumb:
 				smallThumbUrl = images.upload(smallThumb, self.server.url(smallThumb, True)) or ""
 		if thumbUrl and len(thumbUrl) > 300:
