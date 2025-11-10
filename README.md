@@ -56,11 +56,11 @@ The config file is stored in a directory named `data`.
       - `album` - "Listening to [Album Name]"
   - `paused` (boolean, default: `false`) - Displays Rich Presence even while media is paused. Progress/timestamp display while paused is currently broken due to a Discord bug/limitation.
   - `posters`
-    - `enabled` (boolean, default: `true`) - Displays media posters (including album art and artist images). Uses [Slink](https://github.com/andrii-kryvoviaz/slink) for image hosting.
-    - `slinkServerUrl` (string, default: `""`) - URL of your self-hosted Slink instance (e.g., `https://slink.example.com` or `http://192.168.1.100:3007`).
-    - `slinkAPIKey` (string, default: `""`) - [Slink API key](#obtaining-a-slink-api-key) (optional but recommended).
-    - `maxSize` (int, default: `256`) - Maximum width and maximum height to use while downscaling posters before uploading them.
-    - `fit` (boolean, default: `true`) - Fits posters inside a square while maintaining the original aspect ratio. Otherwise, Discord crops posters into a square.
+    - `enabled` (boolean, default: `true`) - Displays media posters (including album art and artist images). Uses [TMDB](https://www.themoviedb.org/) poster URLs directly when available, and uploads to [imgBB](https://imgbb.com/) as a fallback for media not on TMDB (e.g., audiobooks, music).
+    - `tmdbAPIKey` (string, default: `""`) - [TMDB API key](#obtaining-api-keys) (required for TMDB poster URLs).
+    - `imgbbAPIKey` (string, default: `""`) - [imgBB API key](#obtaining-api-keys) (required for fallback image uploads).
+    - `maxSize` (int, default: `256`) - Maximum width and maximum height to use while downscaling posters before uploading them. Only applies to images uploaded to imgBB.
+    - `fit` (boolean, default: `true`) - Fits posters inside a square while maintaining the original aspect ratio. Otherwise, Discord crops posters into a square. Only applies to images uploaded to imgBB.
   - `buttons` (list) - [Information](#buttons)
     - `label` (string) - The label to be displayed on the button.
     - `url` (string) - A web address or a [dynamic URL placeholder](#dynamic-button-urls).
@@ -74,15 +74,35 @@ The config file is stored in a directory named `data`.
     - `whitelistedLibraries` (string list, optional) - If set, alerts originating from libraries that are not in this list are ignored.
     - `ipcPipeNumber` (int, optional) - A number in the range of `0-9` to specify the Discord IPC pipe to connect to. Defaults to `-1`, which specifies that the first existing pipe in the range should be used. When a Discord client is launched, it binds to the first unbound pipe number, which is typically `0`.
 
-### Obtaining a Slink API key
+### Obtaining API Keys
 
-1. Go to your Slink instance (the URL you configured in `slinkServerUrl`).
-2. Log in to your account.
-3. Navigate to your profile/settings and go to the "API Keys" section.
-4. Create a new API key.
-5. Copy the API key and add it to your configuration file as `slinkAPIKey`.
+#### TMDB API Key
 
-**Note:** The API key is optional. If not provided, Slink may still work if your instance allows anonymous uploads.
+1. Go to [The Movie Database (TMDB)](https://www.themoviedb.org/) and create a free account.
+2. Navigate to [API Settings](https://www.themoviedb.org/settings/api).
+3. Click "Request an API Key" and select "Developer" as the type.
+4. Fill out the application form (you can use any website URL).
+5. Copy the API key (v3 auth) and add it to your configuration file as `tmdbAPIKey`.
+
+**Note:** TMDB API keys are free and have generous rate limits. The API key is required for displaying poster images for movies and TV shows.
+
+#### imgBB API Key
+
+1. Go to [imgBB](https://imgbb.com/) and create a free account.
+2. Navigate to [API Settings](https://api.imgbb.com/).
+3. Copy your API key and add it to your configuration file as `imgbbAPIKey`.
+
+**Note:** The imgBB API key is required for uploading images when TMDB poster URLs aren't available (e.g., audiobooks, music, or media without TMDB entries). Images uploaded to imgBB expire after 24 hours.
+
+#### How Image Hosting Works
+
+The script uses a two-tier approach for displaying poster images:
+
+1. **TMDB Poster URLs (Primary)** - For movies and TV shows that have TMDB entries, the script fetches poster URLs directly from TMDB's CDN. This is fast, requires no upload, and works immediately. TMDB URLs are cached permanently.
+
+2. **imgBB Upload (Fallback)** - For media without TMDB entries (audiobooks, music, custom content, etc.), the script downloads the image from your Plex server, processes it (resizes, fits to square if enabled), and uploads it to imgBB. These uploaded images expire after 24 hours and are cached to avoid re-uploading the same image.
+
+The script automatically chooses the appropriate method based on whether a TMDB ID is available in the Plex metadata.
 
 ### Buttons
 
@@ -125,8 +145,8 @@ display:
   paused: false
   posters:
     enabled: true
-    slinkServerUrl: https://slink.example.com
-    slinkAPIKey: your-api-key-here
+    tmdbAPIKey: your-tmdb-api-key-here
+    imgbbAPIKey: your-imgbb-api-key-here
     maxSize: 256
     fit: true
   buttons:
