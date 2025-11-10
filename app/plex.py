@@ -49,55 +49,6 @@ buttonTypeGuidTypeMap = {
 	"musicbrainz": "mbid",
 }
 
-def getTmdbPosterUrl(tmdbId: str, mediaType: str) -> Optional[str]:
-	"""Get TMDB poster URL for a given TMDB ID and media type."""
-	if not tmdbId:
-		return None
-	
-	try:
-		# Determine API endpoint based on media type
-		if mediaType == "movie":
-			endpoint = f"https://api.themoviedb.org/3/movie/{tmdbId}"
-		elif mediaType in ["episode", "live_episode"]:
-			# For TV shows, we need to get the show ID, not episode ID
-			# This will be handled by the caller
-			endpoint = f"https://api.themoviedb.org/3/tv/{tmdbId}"
-		else:
-			return None
-		
-		# Add API key if configured (optional but recommended for rate limits)
-		params = {}
-		if config.config["display"]["posters"]["tmdbApiKey"]:
-			params["api_key"] = config.config["display"]["posters"]["tmdbApiKey"]
-		
-		# Request poster path from TMDB
-		response = requests.get(endpoint, params=params, timeout=5)
-		response.raise_for_status()
-		data = response.json()
-		
-		# Get poster path
-		posterPath = data.get("poster_path")
-		if not posterPath:
-			return None
-		
-		# Construct TMDB CDN URL
-		# Use w500 for 500px width (good balance of quality and size)
-		# TMDB CDN URLs are publicly accessible
-		posterUrl = f"https://image.tmdb.org/t/p/w500{posterPath}"
-		
-		# Check URL length (Discord limit is 300 characters)
-		if len(posterUrl) > 300:
-			logger.warning(f"TMDB poster URL exceeds 300 characters ({len(posterUrl)}), using smaller size")
-			# Try w342 (342px) instead
-			posterUrl = f"https://image.tmdb.org/t/p/w342{posterPath}"
-			if len(posterUrl) > 300:
-				return None
-		
-		return posterUrl
-	except Exception as e:
-		logger.debug(f"Failed to get TMDB poster URL for {tmdbId}: {e}")
-		return None
-
 class StateNotification(TypedDict):
 	state: str
 	sessionKey: int
@@ -344,41 +295,8 @@ class PlexAlertListener(threading.Thread):
 			if not config.config["display"]["statusIcon"]:
 				stateStrings.append(state.capitalize())
 		stateText = " · ".join(stateString for stateString in stateStrings if stateString)
-		
-		# Extract GUIDs once for both poster URLs and buttons
-		guidsRaw: list[Guid] = []
-		if mediaType in ["movie", "track"]:
-			guidsRaw = item.guids
-		elif mediaType in ["episode", "live_episode"]:
-			guidsRaw = self.server.fetchItem(item.grandparentRatingKey).guids
-		guids: dict[str, str] = { guidSplit[0]: guidSplit[1] for guidSplit in [guid.id.split("://") for guid in guidsRaw] if len(guidSplit) > 1 }
-		
-		# Get image URLs - try TMDB first
-		thumbUrl = ""
-		smallThumbUrl = ""
-		
-		if config.config["display"]["posters"]["enabled"]:
-			tmdbId = guids.get("tmdb")
-			
-			# Try to get TMDB poster URL
-			if tmdbId and mediaType != "track":
-				thumbUrl = getTmdbPosterUrl(tmdbId, mediaType)
-				if thumbUrl:
-					self.logger.debug(f"Using TMDB poster URL for {mediaType} (TMDB ID: {tmdbId})")
-			
-			# For small images (artist images for tracks), try to get from parent item
-			if smallThumb and mediaType == "track":
-				# For music, we might not have TMDB IDs, so skip for now
-				# Could potentially use MusicBrainz or other sources in the future
-				pass
-			
-			# Validate URL lengths (Discord limit is 300 characters)
-			if thumbUrl and len(thumbUrl) > 300:
-				self.logger.warning("Large image URL exceeds 300 characters (%d), skipping", len(thumbUrl))
-				thumbUrl = ""
-			if smallThumbUrl and len(smallThumbUrl) > 300:
-				self.logger.warning("Small image URL exceeds 300 characters (%d), skipping", len(smallThumbUrl))
-				smallThumbUrl = ""
+		thumbUrl = images.upload(thumb, self.server.url(thumb, True)) if thumb and config.config["display"]["posters"]["enabled"] else ""
+		smallThumbUrl = images.upload(smallThumb, self.server.url(smallThumb, True)) if smallThumb and config.config["display"]["posters"]["enabled"] else ""
 		statusTextTypeKey = "listening" if mediaType == "track" else "watching"
 		statusTextType = config.config["display"]["statusTextType"][statusTextTypeKey]
 		statusDisplayType = statusTextTypeActivityStatusDisplayTypeMap.get(statusTextType, discord.ActivityStatusDisplayType.NAME)
@@ -403,6 +321,12 @@ class PlexAlertListener(threading.Thread):
 		if stateText:
 			activity["state"] = adjustTextLength(stateText, 120, 2)
 		if config.config["display"]["buttons"]:
+			guidsRaw: list[Guid] = []
+			if mediaType in ["movie", "track"]:
+				guidsRaw = item.guids
+			elif mediaType == "episode":
+				guidsRaw = self.server.fetchItem(item.grandparentRatingKey).guids
+			guids: dict[str, str] = { guidSplit[0]: guidSplit[1] for guidSplit in [guid.id.split("://") for guid in guidsRaw] if len(guidSplit) > 1 }
 			buttons: list[discord.ActivityButton] = []
 			for button in config.config["display"]["buttons"]:
 				if "mediaTypes" in button and mediaType not in button["mediaTypes"]:

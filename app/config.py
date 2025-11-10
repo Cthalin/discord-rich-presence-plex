@@ -16,7 +16,7 @@ class StatusTextType(TypedDict):
 
 class Posters(TypedDict):
 	enabled: bool
-	tmdbApiKey: str
+	imgurClientID: str
 	maxSize: int
 	fit: bool
 
@@ -78,7 +78,7 @@ config: Config = {
 		"paused": False,
 		"posters": {
 			"enabled": True,
-			"tmdbApiKey": "",
+			"imgurClientID": "",
 			"maxSize": 256,
 			"fit": True,
 		},
