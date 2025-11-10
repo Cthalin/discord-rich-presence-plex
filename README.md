@@ -56,8 +56,9 @@ The config file is stored in a directory named `data`.
       - `album` - "Listening to [Album Name]"
   - `paused` (boolean, default: `false`) - Displays Rich Presence even while media is paused. Progress/timestamp display while paused is currently broken due to a Discord bug/limitation.
   - `posters`
-    - `enabled` (boolean, default: `true`) - Displays media posters (including album art and artist images). [Imgur](https://imgur.com/) is used if `imgurClientID` is set, otherwise [Litterbox](https://litterbox.catbox.moe/) is used.
-    - `imgurClientID` (string, default: `""`) - [Obtention Instructions](#obtaining-an-imgur-client-id)
+    - `enabled` (boolean, default: `true`) - Displays media posters (including album art and artist images). Uses [Slink](https://github.com/andrii-kryvoviaz/slink) for image hosting.
+    - `slinkServerUrl` (string, default: `""`) - URL of your self-hosted Slink instance (e.g., `https://slink.example.com` or `http://192.168.1.100:3007`).
+    - `slinkAPIKey` (string, default: `""`) - [Slink API key](#obtaining-a-slink-api-key) (optional but recommended).
     - `maxSize` (int, default: `256`) - Maximum width and maximum height to use while downscaling posters before uploading them.
     - `fit` (boolean, default: `true`) - Fits posters inside a square while maintaining the original aspect ratio. Otherwise, Discord crops posters into a square.
   - `buttons` (list) - [Information](#buttons)
@@ -73,11 +74,15 @@ The config file is stored in a directory named `data`.
     - `whitelistedLibraries` (string list, optional) - If set, alerts originating from libraries that are not in this list are ignored.
     - `ipcPipeNumber` (int, optional) - A number in the range of `0-9` to specify the Discord IPC pipe to connect to. Defaults to `-1`, which specifies that the first existing pipe in the range should be used. When a Discord client is launched, it binds to the first unbound pipe number, which is typically `0`.
 
-### Obtaining an Imgur client ID
+### Obtaining a Slink API key
 
-1. Go to Imgur's [application registration page](https://api.imgur.com/oauth2/addclient).
-2. Enter any name for the application and pick "OAuth 2 authorization without a callback URL" as the authorisation type.
-3. Submit the form to obtain your application's client ID.
+1. Go to your Slink instance (the URL you configured in `slinkServerUrl`).
+2. Log in to your account.
+3. Navigate to your profile/settings and go to the "API Keys" section.
+4. Create a new API key.
+5. Copy the API key and add it to your configuration file as `slinkAPIKey`.
+
+**Note:** The API key is optional. If not provided, Slink may still work if your instance allows anonymous uploads.
 
 ### Buttons
 
@@ -120,7 +125,8 @@ display:
   paused: false
   posters:
     enabled: true
-    imgurClientID: 9e9sf637S8bRp4z
+    slinkServerUrl: https://slink.example.com
+    slinkAPIKey: your-api-key-here
     maxSize: 256
     fit: true
   buttons:
