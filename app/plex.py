@@ -295,8 +295,46 @@ class PlexAlertListener(threading.Thread):
 			if not config.config["display"]["statusIcon"]:
 				stateStrings.append(state.capitalize())
 		stateText = " · ".join(stateString for stateString in stateStrings if stateString)
-		thumbUrl = images.upload(thumb, self.server.url(thumb, True)) if thumb and config.config["display"]["posters"]["enabled"] else ""
-		smallThumbUrl = images.upload(smallThumb, self.server.url(smallThumb, True)) if smallThumb and config.config["display"]["posters"]["enabled"] else ""
+		
+		# Try to get TMDB poster URLs first, fallback to upload if not available
+		thumbUrl = ""
+		smallThumbUrl = ""
+		if config.config["display"]["posters"]["enabled"]:
+			# Extract TMDB IDs from GUIDs
+			guidsRaw: list[Guid] = []
+			if mediaType == "movie":
+				guidsRaw = item.guids
+			elif mediaType in ["episode", "live_episode"]:
+				guidsRaw = self.server.fetchItem(item.grandparentRatingKey).guids
+			elif mediaType == "track":
+				# Tracks don't have TMDB, skip
+				guidsRaw = []
+			
+			guids: dict[str, str] = { guidSplit[0]: guidSplit[1] for guidSplit in [guid.id.split("://") for guid in guidsRaw] if len(guidSplit) > 1 }
+			tmdbId = guids.get("tmdb")
+			
+			if tmdbId and thumb:
+				# Try TMDB poster URL first
+				tmdbPosterUrl = images.getTmdbPosterUrl(tmdbId, mediaType)
+				if tmdbPosterUrl:
+					thumbUrl = tmdbPosterUrl
+					self.logger.debug(f"Using TMDB poster URL for {mediaType}: {tmdbPosterUrl}")
+				else:
+					# Fallback to upload (which now returns None, so we'll skip)
+					thumbUrl = images.upload(thumb, self.server.url(thumb, True)) or ""
+			elif thumb:
+				# No TMDB ID, try upload (which now returns None)
+				thumbUrl = images.upload(thumb, self.server.url(thumb, True)) or ""
+			
+			# For small thumb (artist images for tracks), no TMDB support
+			if smallThumb:
+				smallThumbUrl = images.upload(smallThumb, self.server.url(smallThumb, True)) or ""
+		if thumbUrl and len(thumbUrl) > 300:
+			self.logger.warning("Large image URL exceeds 300 characters (%d), skipping", len(thumbUrl))
+			thumbUrl = ""
+		if smallThumbUrl and len(smallThumbUrl) > 300:
+			self.logger.warning("Small image URL exceeds 300 characters (%d), skipping", len(smallThumbUrl))
+			smallThumbUrl = ""
 		statusTextTypeKey = "listening" if mediaType == "track" else "watching"
 		statusTextType = config.config["display"]["statusTextType"][statusTextTypeKey]
 		statusDisplayType = statusTextTypeActivityStatusDisplayTypeMap.get(statusTextType, discord.ActivityStatusDisplayType.NAME)

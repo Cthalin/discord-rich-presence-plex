@@ -34,3 +34,12 @@ def set(key: str, value: str, expiry: int) -> None:
 			json.dump(cache, cacheFile, indent = "\t")
 	except:
 		logger.exception("Failed to write to the cache file")
+
+def delete(key: str) -> None:
+	if key in cache:
+		del cache[key]
+		try:
+			with open(constants.cacheFilePath, "w", encoding = "UTF-8") as cacheFile:
+				json.dump(cache, cacheFile, indent = "\t")
+		except:
+			logger.exception("Failed to write to the cache file")
